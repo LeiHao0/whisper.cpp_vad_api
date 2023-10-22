@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>File Receiver</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .drop-container {
+            border: 2px dashed #3498db;
+            padding: 200px;
+            text-align: center;
+            cursor: pointer;
+        }
+        #upload-button {
+            display: none;
+            padding: 15px 30px; /* Increase padding to make it larger */
+            font-size: 18px; /* Increase font size for better visibility */
+            background-color: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="drop-container" id="drop-area">
+        <h1>Drag & Drop Files Here</h1>
+        <p>or</p>
+        <p>Click to select files</p>
+        <input type="file" id="file-input" multiple style="display: none;">
+    </div>
+    <ul id="file-list">
+        <!-- Uploaded files will be displayed here -->
+    </ul>
+    <button id="upload-button" style="display: none;">Upload</button>
+
+    <script>
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('file-input');
+        const fileList = document.getElementById('file-list');
+        const uploadButton = document.getElementById('upload-button');
+        const uploadedFiles = [];
+
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.style.border = '2px dashed #e74c3c';
+        });
+
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.style.border = '2px dashed #3498db';
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.style.border = '2px dashed #3498db';
+            const files = e.dataTransfer.files;
+            handleFiles(files);
+        });
+
+        dropArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', () => {
+            const files = fileInput.files;
+            handleFiles(files);
+        });
+
+        uploadButton.addEventListener('click', () => {
+            // Upload files to the server
+            if (uploadedFiles.length > 0) {
+                const formData = new FormData();
+                uploadedFiles.forEach(file => formData.append('file', file));
+                
+                fetch('/', {
+                    method: 'POST',
+                    body: formData,
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data); // Handle the response from the Flask API
+                    // Clear the list and reset the uploadedFiles array
+                    uploadedFiles.length = 0;
+                    fileList.innerHTML = '';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+            }
+        });
+
+        function handleFiles(files) {
+            for (const file of files) {
+                if (file) {
+                    const fileName = file.name;
+                    const listItem = document.createElement('li');
+                    listItem.textContent = fileName;
+                    fileList.appendChild(listItem);
+                    uploadedFiles.push(file);
+                }
+            }
+
+            // Show the "Upload" button when files are added to the list
+            if (uploadedFiles.length > 0) {
+                uploadButton.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
