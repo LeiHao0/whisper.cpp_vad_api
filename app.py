@@ -1,4 +1,4 @@
-# conda activate whisper.cpp
+# conda activate py310-whisper
 
 import torch
 from IPython.display import Audio
@@ -132,6 +132,8 @@ def conbine_text(input_files):
                 outfile.write(content)
                 outfile.write('\n---\n\n')
 
+    combined_content = combined_content[:-3]
+
     for f in input_files:
         os.remove(f)
         print("removed: ", f)
@@ -161,7 +163,12 @@ app = Flask(__name__)
 
 
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/', methods=['GET'])
+def main():
+    return render_template('main.html')
+
+
+@app.route('/upload', methods=['POST'])
 def upload_file():
     if request.method == 'POST':
         uploaded_files = request.files.getlist('file')
@@ -183,9 +190,7 @@ def upload_file():
         combined_audio_file = conbine_audio(fns_vad)
         zip_file = zip(combined_text_file, combined_audio_file)
 
-        send_file(zip_file, as_attachment=True, download_name='combined_files.zip')
-
-    return render_template('main.html')
+        return send_file(zip_file, as_attachment=True, download_name='combined_files.zip')
 
 
 if __name__ == '__main__':
