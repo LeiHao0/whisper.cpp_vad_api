@@ -84,36 +84,60 @@ def tts(filename):
     return f"{output}.txt"
 
 import uuid
-
+from datetime import datetime
 
 def fn_uuid(file):
+    print(file.filename)
     filename, file_extension = os.path.splitext(file.filename)
-    new_filename = f"{str(uuid.uuid4())}{file_extension}"
+
+    try:
+        parsed_date = datetime.strptime(filename, '%b %d, %Y at %H:%M')
+        formatted_date = parsed_date.strftime('%Y-%m-%d_%H-%M')
+        print(formatted_date)
+
+    except ValueError:
+        print("Unable to parse the date string.")
+        formatted_date = str(uuid.uuid4())
+
+    new_filename = f"{formatted_date}{file_extension}"
     return new_filename
 
+def reverse_date(date):
+    print('date: ', date)
+    date = date.replace('_vad.txt', '')
+    try:
+        parsed_date = datetime.strptime(date, '%Y-%m-%d_%H-%M')
+        formatted_date = parsed_date.strftime('%b %d, %Y at %H:%M')
+        return formatted_date
+    except ValueError:
+        print("Unable to parse the date string.")
+        return date
+
+    
 import mimetypes
 
 
 def is_video_audio_file(file):
     mime, _ = mimetypes.guess_type(file.filename)
+    print('mime: ', mime)
     return ('audio' in mime) or ('video' in mime)
 
 
 from pydub import AudioSegment
 
-def conbine_audio(audio_files):
-    output_file = 'combined.m4a'
+def conbine_audio(input_files):
+    output_file = f'{input_files[0][:10]}.m4a'
 
     combined_audio = AudioSegment.empty()
 
-    for audio_file in audio_files:
+    for audio_file in input_files:
         audio = AudioSegment.from_wav(audio_file)
         combined_audio += audio
         combined_audio += AudioSegment.silent(duration=1000)
 
     combined_audio.export(output_file, format="mp4")
 
-    for audio_file in audio_files:
+    for audio_file in input_files:
         os.remove(audio_file)
         print("removed: ", audio_file)
 
@@ -123,16 +147,14 @@ def conbine_audio(audio_files):
 
 
 def conbine_text(input_files):
-    output_file = 'combined.txt'
+    output_file = f'{input_files[0][:10]}.txt'
 
     with open(output_file, 'w') as outfile:
         for file_name in input_files:
+            outfile.write(f'\n## {reverse_date(file_name)}\n\n')
             with open(file_name, 'r') as infile:
                 content = infile.read()
                 outfile.write(content)
-                outfile.write('\n---\n\n')
-
-    combined_content = combined_content[:-3]
 
     for f in input_files:
         os.remove(f)
@@ -144,15 +166,14 @@ def conbine_text(input_files):
 import shutil
 import zipfile
 
-def zip(combined_text_file, combined_audio_file):
-
-    zip_file = 'combined_files.zip'
+def zip(combined_text, combined_audio):
+    zip_file = f'{remove_ext(combined_text)}.zip'
     with zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-        zf.write(combined_text_file, 'combined.txt')
-        zf.write(combined_audio_file, 'combined.m4a')
+        zf.write(combined_text)
+        zf.write(combined_audio)
     
-    os.remove(combined_text_file)
-    os.remove(combined_audio_file)
+    os.remove(combined_text)
+    os.remove(combined_audio)
 
     return zip_file
     
@@ -186,11 +207,12 @@ def upload_file():
             else:
                 print(file, 'is not audio or video')
 
-        combined_text_file = conbine_text(fns_txt)
-        combined_audio_file = conbine_audio(fns_vad)
-        zip_file = zip(combined_text_file, combined_audio_file)
+        combined_text = conbine_text(fns_txt)
+        combined_audio = conbine_audio(fns_vad)
+        zip_file = zip(combined_text, combined_audio)
 
-        return send_file(zip_file, as_attachment=True, download_name='combined_files.zip')
+        return send_file(zip_file, as_attachment=True, download_name=zip_file)
+
 
 
 if __name__ == '__main__':

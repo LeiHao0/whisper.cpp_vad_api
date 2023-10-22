@@ -5,6 +5,7 @@
     <style>
       body {
         display: flex;
+        flex-direction: column;
         justify-content: center;
         align-items: center;
         height: 100vh;
@@ -12,31 +13,44 @@
       }
       .drop-container {
         border: 2px dashed #3498db;
-        padding: 40px;
+        flex-direction: column;
         text-align: center;
         cursor: pointer;
+        width: 50%;
+        height: 30%;
       }
       .upload-button {
-            display: none;
-            padding: 10px 20px; /* Increase padding to make it bigger */
-            background-color: #3498db;
-            color: #fff;
-            font-size: 20px;
-            cursor: pointer;
-            border: none;
-            border-radius: 8px;
+        display: none;
+        padding: 10px 20px;
+        flex-direction: column;
+        background-color: #3498db;
+        color: #fff;
+        font-size: 20px;
+        cursor: pointer;
+        border: none;
+        border-radius: 8px;
+      }
+      #text-input {
+            width: 50%;
+            height: 20%;
         }
     </style>
   </head>
   <body>
+    <textarea
+      id="text-input"
+      rows="4"
+      cols="50"
+      placeholder="Paste text here"
+    ></textarea>
     <div class="drop-container" id="drop-area">
-        <h1>Drag & Drop Files Here</h1>
-        <p>or</p>
-        <p>Click to select files</p>
-        <input type="file" id="file-input" multiple style="display: none;">
+      <h1>Drag & Drop Files Here</h1>
+      <p>or</p>
+      <p>Click to select files</p>
+      <input type="file" id="file-input" multiple style="display: none" />
     </div>
     <ul id="file-list">
-        <!-- Uploaded files will be displayed here -->
+      <!-- Uploaded files will be displayed here -->
     </ul>
     <button id="upload-button" class="upload-button">Upload</button>
 
@@ -46,6 +60,15 @@
       const fileList = document.getElementById("file-list");
       const uploadButton = document.getElementById("upload-button");
       const uploadedFiles = [];
+      var filenames = [];
+
+      function formatDate(inputText) {
+        const date = new Date(inputText);
+        if (!isNaN(date.getTime())) {
+          return date.toISOString().replace(/[:T-]/g, "_").split(".")[0];
+        }
+        return inputText;
+      }
 
       dropArea.addEventListener("dragover", (e) => {
         e.preventDefault();
@@ -76,7 +99,15 @@
         // Upload files to the server
         if (uploadedFiles.length > 0) {
           const formData = new FormData();
-          uploadedFiles.forEach((file) => formData.append("file", file));
+          // uploadedFiles.forEach((file) => formData.append("file", file));
+
+          for (let i = 0; i < uploadedFiles.length; i++) {
+            file = uploadedFiles[i];
+            fn = filenames[i] + "." + getFileExt(file.name);
+            const renamedFile = renameFile(file, fn);
+            console.log("renamedFile: ", renamedFile);
+            formData.append("file", renamedFile, renamedFile.name);
+          }
 
           fetch("/upload", {
             method: "POST",
@@ -90,7 +121,7 @@
               // Create a download link and trigger a click to start the download
               const a = document.createElement("a");
               a.href = url;
-              a.download = "combined.zip";
+              a.download = "result.zip";
               document.body.appendChild(a);
               a.click();
 
@@ -98,8 +129,8 @@
               window.URL.revokeObjectURL(url);
 
               // Clear the list and reset the uploadedFiles array
-              uploadedFiles.length = 0;
-              fileList.innerHTML = "";
+              // uploadedFiles.length = 0;
+              // fileList.innerHTML = "";
             })
             .catch((error) => {
               console.error("Error:", error);
@@ -107,10 +138,25 @@
         }
       });
 
+      function renameFile(file, newFileName) {
+        try {
+          return new File([file], newFileName, { type: file.type });
+        } catch (e) {
+          // If the File constructor is not supported, create a Blob instead
+          console.error(e);
+          return new Blob([file], { type: file.type });
+        }
+      }
+
       function handleFiles(files) {
-        for (const file of files) {
+        for (let i = 0; i < files.length; i++) {
+          file = files[i];
           if (file) {
-            const fileName = file.name;
+            j = uploadedFiles.length;
+            const fileName =
+              j < filenames.length
+                ? filenames[j] + "." + getFileExt(file.name)
+                : file.name;
             const listItem = document.createElement("li");
             listItem.textContent = fileName;
             fileList.appendChild(listItem);
@@ -123,6 +169,21 @@
           uploadButton.style.display = "block";
         }
       }
+
+      function getFileExt(filename) {
+        return filename.slice(((filename.lastIndexOf(".") - 1) >>> 0) + 2);
+      }
+      const textInput = document.getElementById("text-input");
+      textInput.addEventListener("input", () => {
+        const text = textInput.value;
+        const lines = text.split("\n");
+        filenames = lines.filter((dateString) => {
+          // Check if the date string matches the 'Mmm dd, yyyy at HH:mm' format
+          const dateRegex = /^[A-Za-z]{3}\s\d{1,2},\s\d{4}\sat\s\d{2}:\d{2}$/;
+          return dateRegex.test(dateString);
+        });
+        console.log(filenames);
+      });
     </script>
   </body>
 </html>
