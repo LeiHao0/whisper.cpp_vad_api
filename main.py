@@ -1,4 +1,4 @@
-# conda activate py310-whisper
+# conda activate whisper.cpp
 
 import torch
 from IPython.display import Audio
@@ -47,7 +47,7 @@ def vad(filename):
     
     model, utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
                                 model='silero_vad',
-                                force_reload=True,
+                                force_reload=False,
                                 onnx=USE_ONNX)
 
     (get_speech_timestamps,
@@ -80,50 +80,113 @@ def tts(filename):
 """
     run_command(cmd)
 
-    remove_file(filename)
+    # remove_file(filename)
     return f"{output}.txt"
 
-def format_fn(fn):
-    return fn.replace(" ", "_")
+import uuid
 
-from flask import Flask, render_template, request, send_file, jsonify
+
+def fn_uuid(file):
+    filename, file_extension = os.path.splitext(file.filename)
+    new_filename = f"{str(uuid.uuid4())}{file_extension}"
+    return new_filename
+
+import mimetypes
+
+
+def is_video_audio_file(file):
+    mime, _ = mimetypes.guess_type(file.filename)
+    return ('audio' in mime) or ('video' in mime)
+
+
+from pydub import AudioSegment
+
+def conbine_audio(audio_files):
+    output_file = 'combined.m4a'
+
+    combined_audio = AudioSegment.empty()
+
+    for audio_file in audio_files:
+        audio = AudioSegment.from_wav(audio_file)
+        combined_audio += audio
+        combined_audio += AudioSegment.silent(duration=1000)
+
+    combined_audio.export(output_file, format="mp4")
+
+    for audio_file in audio_files:
+        os.remove(audio_file)
+        print("removed: ", audio_file)
+
+    print("Audio files combined and compressed to", output_file)
+
+    return output_file
+
+
+def conbine_text(input_files):
+    output_file = 'combined.txt'
+
+    with open(output_file, 'w') as outfile:
+        for file_name in input_files:
+            with open(file_name, 'r') as infile:
+                content = infile.read()
+                outfile.write(content)
+                outfile.write('\n---\n\n')
+
+    for f in input_files:
+        os.remove(f)
+        print("removed: ", f)
+
+    print("Text files combined and saved to", output_file)
+    return output_file
+
+import shutil
+import zipfile
+
+def zip(combined_text_file, combined_audio_file):
+
+    zip_file = 'combined_files.zip'
+    with zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.write(combined_text_file, 'combined.txt')
+        zf.write(combined_audio_file, 'combined.m4a')
+    
+    os.remove(combined_text_file)
+    os.remove(combined_audio_file)
+
+    return zip_file
+    
+
+from flask import Flask, render_template, request, send_file, jsonify, Response
 
 app = Flask(__name__)
 
-# Serve the HTML form on the root URL
-@app.route('/', methods=['GET'])
-def serve_form():
-    return render_template('upload_form.html')
 
-@app.route('/api', methods=['POST'])
-def api():
-    file = request.files['file']
-    if file:
-        fn = format_fn(file.filename)
-        file.save(fn)
-        output = tts(convert(fn))
-        txt = open(output, 'r').read()
-        print(txt)
-        response_data = {'text': txt}
 
-        remove_file(output)
-        return jsonify(response_data), 200
-    else:
-        return jsonify({'error': 'No file provided'}), 400
-
-# Handle file upload
-@app.route('/upload', methods=['POST'])
+@app.route('/', methods=['GET', 'POST'])
 def upload_file():
-    file = request.files['file']
-    if file:
-        fn = format_fn(file.filename)
-        file.save(fn)
-        output = tts(vad(convert(fn)))
-        f = send_file(f'{output}', as_attachment=True)
-        remove_file(output)
-        return f
-    else:
-        return 'No file provided'
+    if request.method == 'POST':
+        uploaded_files = request.files.getlist('file')
+        fns_vad = []
+        fns_txt = []
+        for file in uploaded_files :
+            if file and is_video_audio_file(file):
+                fn = fn_uuid(file)
+                file.save(fn)
+                
+                fn_vad = vad(convert(fn))
+                fn_txt = tts(fn_vad)
+                fns_vad.append(fn_vad)
+                fns_txt.append(fn_txt)
+            else:
+                print(file, 'is not audio or video')
+
+        combined_text_file = conbine_text(fns_txt)
+        combined_audio_file = conbine_audio(fns_vad)
+        zip_file = zip(combined_text_file, combined_audio_file)
+
+        send_file(zip_file, as_attachment=True, download_name='combined_files.zip')
+
+    return render_template('main.html')
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000, host='0.0.0.0')
